@@ -8,9 +8,8 @@ SELECT first_name,last_name FROM customer c1
 			)ORDER BY c1.last_name;
             
 #Find actors that don't work in any film
-SELECT ac.first_name, ac.last_name FROM film_actor fi_ac
-inner join actor ac on ac.actor_id = fi_ac.actor_id
-where NOT EXISTS(select * from actor ac2 where ac.actor_id = ac2.actor_id);
+SELECT ac.first_name, ac.last_name FROM actor ac
+where ac.actor_id not in(select fi_ac.actor_id from film_actor fi_ac);
 		
 #Find customers that rented only one 
 select c.first_name,c.last_name,count(r.customer_id) as cant_compras from rental r 
