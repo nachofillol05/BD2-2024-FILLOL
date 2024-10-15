@@ -1,0 +1,100 @@
+use VIVERO_FENIX;
+
+/*Crea una vista llamada customer_purchase_summary que proporcione un resumen 
+de las compras de los clientes. La vista debe incluir las siguientes columnas: id del cliente, nombre del cliente, cantidad total de compras realizadas, total gastado en compras, 
+categoría de planta más comprada y la cantidad de plantas en cada categoría que el cliente ha comprado. Utiliza funciones de agregación y GROUP_CONCAT según sea necesario. */
+drop view customer_purchase_summary;
+CREATE VIEW customer_purchase_summary AS 
+SELECT COD_CLIENTE,CONCAT(NOMBRE, " ", APELLIDO) AS NOMBRE_COMPLETO, 
+(SELECT COUNT(*) FROM FACTURAS F WHERE F.COD_CLIENTE=C.COD_CLIENTE) AS CANT_COMPRAS, 
+(SELECT SUM(DF.CANTIDAD * P.PRECIO) FROM FACTURAS F INNER JOIN DETALLES_FACTURAS DF USING(NRO_FACTURA) INNER JOIN PLANTAS P USING(COD_PLANTA) WHERE F.COD_CLIENTE=C.COD_CLIENTE) AS TOTAL_GASTADO,
+(SELECT NOMBRE FROM DETALLES_FACTURAS INNER JOIN FACTURAS F USING(NRO_FACTURA) INNER JOIN PLANTAS P USING(COD_PLANTA) INNER JOIN TIPOS_PLANTAS TP USING(COD_TIPO_PLANTA) WHERE F.COD_CLIENTE=C.COD_CLIENTE GROUP BY COD_TIPO_PLANTA ORDER BY SUM(CANTIDAD) DESC LIMIT 1) AS CATEGORIAMASCOMPRADA,
+(SELECT GROUP_CONCAT(CANT SEPARATOR "; ") FROM (SELECT CONCAT(NOMBRE,": ",SUM(CANTIDAD)) AS CANT FROM DETALLES_FACTURAS INNER JOIN FACTURAS F USING(NRO_FACTURA) INNER JOIN PLANTAS P USING(COD_PLANTA) INNER JOIN TIPOS_PLANTAS TP USING(COD_TIPO_PLANTA) WHERE F.COD_CLIENTE=C.COD_CLIENTE GROUP BY COD_TIPO_PLANTA) AS CANTXCAT) AS CANTIDADXCATEGORIA
+FROM CLIENTES C;
+#SELECT MAX((SELECT SUM(CANTIDAD) FROM DETALLES_FACTURAS INNER JOIN FACTURAS F USING(NRO_FACTURA) INNER JOIN PLANTAS P USING(COD_PLANTA) INNER JOIN TIPOS_PLANTAS TP USING(COD_TIPO_PLANTA) GROUP BY COD_TIPO_PLANTA));
+select * from customer_purchase_summary;
+/* Crea un procedimiento almacenado con un parámetro de salida que genere una lista 
+de clientes activos en una cierta localidad. El procedimiento debe aceptar el nombre de la localidad como entrada y devolver una lista de nombres y apellidos de clientes separados 
+por ";". Utiliza un cursor para recorrer los resultados y garantiza que solo se incluyan clientes de la localidad especificada en la lista.. */
+DELIMITER //
+CREATE PROCEDURE clientes_activosxlocalidad (IN LOCALIDAD VARCHAR(255),OUT LISTA VARCHAR(MAX))
+BEGIN
+SELECT GROUP_CONCAT(CONCAT(C.NOMBRE," ",C.APELLIDO) SEPARATOR ";") FROM CLIENTES C INNER JOIN LOCALIDADES L USING(COD_LOCALIDAD) WHERE L.NOMBRE=LOCALIDAD;
+
+END
+DELIMITER ;
+
+
+/* Crea un procedimiento almacenado con un parámetro de salida que genere una lista 
+de clientes activos en una cierta localidad. El procedimiento debe aceptar el nombre de la localidad como entrada y devolver una lista de nombres y apellidos de clientes separados 
+por ";". Utiliza un cursor para recorrer los resultados y garantiza que solo se incluyan clientes de la localidad especificada en la lista.. */
+DROP PROCEDURE clientes_activos;
+DELIMITER //
+create procedure clientes_activos(IN LOCALIDAD VARCHAR(255), OUT LISTA TEXT)
+BEGIN
+#fALTA QUE SEAN SOLO LOS ACTIVOS
+	DECLARE CLIENTE_NOMBRE VARCHAR(255);
+    DECLARE FINISHED BOOLEAN;
+	DECLARE LISTA_CLIENTES CURSOR FOR SELECT CONCAT(C.NOMBRE," ",C.APELLIDO) FROM CLIENTES C INNER JOIN LOCALIDADES L USING(COD_LOCALIDAD) WHERE L.NOMBRE=LOCALIDAD;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET FINISHED = 1;
+    SET LISTA = '';
+    OPEN LISTA_CLIENTES;
+    getList:LOOP
+		FETCH LISTA_CLIENTES INTO CLIENTE_NOMBRE;
+        
+        IF FINISHED =1 THEN
+			LEAVE getList;
+		END IF;
+       
+        IF LISTA = '' THEN
+			SET LISTA = CLIENTE_NOMBRE;
+            SELECT "ENTRO";
+        ELSE
+			SET LISTA = CONCAT(CLIENTE_NOMBRE,"; ",LISTA);
+		END IF;
+    END LOOP getList;
+    CLOSE LISTA_CLIENTES;
+END
+
+
+delimiter ;
+call clientes_activos("CORDOBA",@LISTA);
+SELECT @LISTA;
+
+
+
+
+ALTER TABLE PLANTAS ADD COLUMN LASTMODICATION DATE;
+SELECT * FROM PLANTAS;
+ALTER TABLE PLANTAS DROP COLUMN LASTMODICATION;
+
+ALTER TABLE PLANTAS CHANGE LASTMODICATION LASTMODIFICATION DATETIME;
+ALTER TABLE PLANTAS ADD COLUMN LASTMODIFIERUSER VARCHAR(255);
+DELIMITER // 
+CREATE TRIGGER before_update_plantas BEFORE UPDATE 
+ON PLANTAS FOR EACH ROW 
+BEGIN
+	SET NEW.LASTMODIFICATION = NOW();
+    SET NEW.LASTMODIFIERUSER = CURRENT_USER();
+END
+DELIMITER ;
+
+
+DELIMITER // 
+CREATE TRIGGER before_insert_plantas BEFORE INSERT 
+ON PLANTAS FOR EACH ROW 
+BEGIN
+	SET NEW.LASTMODIFICATION = NOW();
+    SET NEW.LASTMODIFIERUSER = CURRENT_USER();
+END
+DELIMITER ;
+
+
+INSERT INTO PLANTAS (COD_PLANTA, DESCRIPCION, COD_TIPO_PLANTA, PRECIO, STOCK) 
+VALUES (24, 'PLANTAFACHERA', 1, 45.32, 32);
+
+UPDATE PLANTAS 
+SET PRECIO = 50.00 
+WHERE COD_PLANTA = 20;  
+SELECT * FROM PLANTAS;
+SHOW TRIGGERS LIKE 'PLANTAS';
